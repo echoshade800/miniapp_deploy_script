@@ -93,7 +93,19 @@ async function fetchJsonData(url) {
 
 // 更新JSON数据
 function updateJsonData(data, config) {
-    const { name: targetName, moduleName: targetModuleName, releaseUrl: newHost, icon, color, miniAppType, category, image } = config;
+    const { 
+        name: targetName, 
+        moduleName: targetModuleName, 
+        releaseUrl: newHost, 
+        icon, 
+        color, 
+        miniAppType, 
+        category, 
+        image,
+        hot,
+        tag,
+        score
+    } = config;
     console.log("开始更新 JSON 数据");
     const index = data.findIndex(item => item.name === targetName && item.module_name === targetModuleName);
     
@@ -106,6 +118,9 @@ function updateJsonData(data, config) {
         if (miniAppType !== undefined) data[index].miniAppType = miniAppType;
         if (category !== undefined) data[index].category = category;
         if (image !== undefined) data[index].image = image;
+        if (hot !== undefined) data[index].hot = hot;
+        if (tag !== undefined) data[index].tag = tag;
+        if (score !== undefined) data[index].score = score;
         console.log(`已更新 "${targetName}" 的配置`);
     } else {
         console.log("未找到匹配项，添加新项");
@@ -122,7 +137,10 @@ function updateJsonData(data, config) {
             module_name: targetModuleName.replace(/\s+/g, ''), // 简单处理为去掉空格的name
             category: category || "gaming", // 使用配置中的分类，或默认分类
             image: image || "", // 使用配置中的图片，或空图片
-            releaseUrl: newHost // 发布地址
+            releaseUrl: newHost, // 发布地址
+            hot: hot !== undefined ? hot : false, // 使用配置中的 hot，或默认 false
+            tag: tag || [], // 使用配置中的 tag，或默认空数组
+            score: score || "" // 使用配置中的 score，或默认空字符串
         };
         
         data.push(newItem);
@@ -153,11 +171,14 @@ async function saveToS3(data) {
 async function main() {
     try {
         console.log(`接收参数 - name: ${name}, moduleName: ${moduleName}, releaseUrl: ${releaseUrl}, environment: ${environment}`);
-        if (config.icon) console.log(`  icon: ${config.icon}`);
-        if (config.color) console.log(`  color: ${config.color}`);
-        if (config.miniAppType) console.log(`  miniAppType: ${config.miniAppType}`);
-        if (config.category) console.log(`  category: ${config.category}`);
-        if (config.image) console.log(`  image: ${config.image}`);
+        if (config.icon !== undefined) console.log(`  icon: ${config.icon}`);
+        if (config.color !== undefined) console.log(`  color: ${config.color}`);
+        if (config.miniAppType !== undefined) console.log(`  miniAppType: ${config.miniAppType}`);
+        if (config.category !== undefined) console.log(`  category: ${config.category}`);
+        if (config.image !== undefined) console.log(`  image: ${config.image}`);
+        if (config.hot !== undefined) console.log(`  hot: ${config.hot}`);
+        if (config.tag !== undefined) console.log(`  tag: ${JSON.stringify(config.tag)}`);
+        if (config.score !== undefined) console.log(`  score: ${config.score}`);
         
         // 获取现有数据
         const jsonData = await fetchJsonData(jsonUrl);
