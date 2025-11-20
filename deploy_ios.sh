@@ -172,6 +172,26 @@ echo "输出配置 ${CONFIG_JSON}"
 
 node "${SCRIPT_DIR}/update_monster_config.cjs" "${CONFIG_JSON}"
 
+
+# 清除 CloudFront 缓存
+echo "🗑️  清除 CloudFront 缓存..."
+CLOUDFRONT_PATHS="/monster/*"
+DISTRIBUTION_ID="EFR5H7M1UNIXN"
+INVALIDATION_ID=$(aws cloudfront create-invalidation \
+    --distribution-id "$DISTRIBUTION_ID" \
+    --paths $CLOUDFRONT_PATHS \
+    --query 'Invalidation.Id' \
+    --output text)
+
+if [ $? -eq 0 ]; then
+    echo "✅ 缓存清除请求已提交"
+    echo "   失效 ID: $INVALIDATION_ID"
+    echo "   路径: $CLOUDFRONT_PATHS"
+else
+    echo "❌ 缓存清除失败"
+    exit 1
+fi
+
 if [ $? -eq 0 ]; then
   echo "配置更新成功！"
 else
