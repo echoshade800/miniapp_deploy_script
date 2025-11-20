@@ -117,7 +117,7 @@ echo "部署成功！环境: ${ENVIRONMENT}, 版本: ${RELEASE_URL}"
 # 检查 index.tsx 是否存在
 if [ ! -f "index.tsx" ]; then
   echo "警告：在 ${MINIAPP_PATH} 中找不到 index.tsx，将跳过 module name 提取"
-  echo "请手动运行: node ${SCRIPT_DIR}/update_monster_config.cjs ${NAME} <moduleName> ${RELEASE_URL} ${ENVIRONMENT}"
+  echo "请手动运行: node ${SCRIPT_DIR}/update_monster_config.cjs '{\"name\":\"${NAME}\",\"moduleName\":\"<moduleName>\",\"releaseUrl\":\"${RELEASE_URL}\",\"environment\":\"${ENVIRONMENT}\"}'"
   exit 0
 fi
 
@@ -129,13 +129,48 @@ sed -n "s/.*registerComponent('\\([^']*\\)'.*/\\1/p")
 # 检查是否成功提取 module name
 if [ -z "$MODULE_NAME" ]; then
   echo "警告：无法从 index.tsx 中提取 module name"
-  echo "请手动运行: node ${SCRIPT_DIR}/update_monster_config.cjs ${NAME} <moduleName> ${RELEASE_URL} ${ENVIRONMENT}"
+  echo "请手动运行: node ${SCRIPT_DIR}/update_monster_config.cjs '{\"name\":\"${NAME}\",\"moduleName\":\"<moduleName>\",\"releaseUrl\":\"${RELEASE_URL}\",\"environment\":\"${ENVIRONMENT}\"}'"
   exit 0
 fi
 
 # 调用根目录的 update_monster_config.cjs
 echo "正在更新配置 (环境: ${ENVIRONMENT})..."
-node "${SCRIPT_DIR}/update_monster_config.cjs" "${NAME}" "${MODULE_NAME}" "${RELEASE_URL}" "${ENVIRONMENT}"
+
+# 构建基础 JSON 配置对象
+BASE_CONFIG_JSON=$(cat <<EOF
+{
+  "name": "${NAME}",
+  "moduleName": "${MODULE_NAME}",
+  "releaseUrl": "${RELEASE_URL}",
+  "environment": "${ENVIRONMENT}"
+}
+EOF
+)
+
+# 检查是否存在 deploy_config.json，如果存在则合并其内容
+DEPLOY_CONFIG_FILE="${MINIAPP_PATH}/deploy_config.json"
+if [ -f "$DEPLOY_CONFIG_FILE" ]; then
+  echo "发现 deploy_config.json，正在合并配置..."
+  # 使用 jq 合并 JSON（如果 jq 可用）
+  if command -v jq &> /dev/null; then
+    CONFIG_JSON=$(echo "$BASE_CONFIG_JSON" | jq -s '.[0] * .[1]' - "$DEPLOY_CONFIG_FILE")
+  else
+    # 如果没有 jq，使用 Node.js 来合并 JSON
+    CONFIG_JSON=$(node -e "
+      const fs = require('fs');
+      const base = JSON.parse(process.argv[1]);
+      const deploy = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+      console.log(JSON.stringify({...base, ...deploy}));
+    " "$BASE_CONFIG_JSON" "$DEPLOY_CONFIG_FILE")
+  fi
+else
+  echo "未找到 deploy_config.json，使用基础配置"
+  CONFIG_JSON="$BASE_CONFIG_JSON"
+fi
+
+echo "输出配置 ${CONFIG_JSON}"
+
+node "${SCRIPT_DIR}/update_monster_config.cjs" "${CONFIG_JSON}"
 
 if [ $? -eq 0 ]; then
   echo "配置更新成功！"

@@ -7,19 +7,39 @@ const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const args = process.argv.slice(2);
 console.log('接收到的参数:', args);
 
-if (args.length < 3) {
-    console.error('请提供 name、moduleName 和 host 三个参数，格式：node update_monster_config.cjs <name> <moduleName> <host> [environment]');
-    console.error('environment 参数: dev (开发环境) 或 prod (生产环境)，默认为 dev');
+if (args.length < 1) {
+    console.error('请提供 JSON 配置对象，格式：');
+    console.error('node update_monster_config.cjs \'{"name":"...","moduleName":"...","releaseUrl":"...","environment":"..."}\'');
     process.exit(1);
 }
 
-const [name, moduleName, host, environment = 'dev'] = args;
+// 解析 JSON 对象
+let config;
+try {
+    config = JSON.parse(args[0]);
+} catch (error) {
+    console.error('解析 JSON 配置失败:', error.message);
+    console.error('请确保传递的是有效的 JSON 字符串');
+    process.exit(1);
+}
+
+const { name, moduleName, releaseUrl, environment = 'dev' } = config;
+
+// 验证必需字段
+if (!name || !moduleName || !releaseUrl) {
+    console.error('配置对象缺少必需字段: name, moduleName, releaseUrl');
+    console.error('当前配置:', JSON.stringify(config, null, 2));
+    process.exit(1);
+}
 
 // 验证环境参数
 if (environment !== 'dev' && environment !== 'prod') {
     console.error(`错误：环境参数必须是 'dev' 或 'prod'，当前值: ${environment}`);
     process.exit(1);
 }
+
+// 为了向后兼容，将 releaseUrl 赋值给 host
+const host = releaseUrl;
 
 // 根据环境设置 S3 Key 和 JSON URL
 let s3Key;
@@ -72,15 +92,21 @@ async function fetchJsonData(url) {
 }
 
 // 更新JSON数据
-function updateJsonData(data, targetName, targetModuleName, newHost) {
+function updateJsonData(data, config) {
+    const { name: targetName, moduleName: targetModuleName, releaseUrl: newHost, icon, color, miniAppType, category, image } = config;
     console.log("开始更新 JSON 数据");
     const index = data.findIndex(item => item.name === targetName && item.module_name === targetModuleName);
     
     if (index !== -1) {
-        // 找到匹配项，更新host
-        console.log("找到匹配项，更新 releaseUrl");
+        // 找到匹配项，更新 releaseUrl 和其他字段（如果提供了）
+        console.log("找到匹配项，更新配置");
         data[index].releaseUrl = newHost;
-        console.log(`已更新 "${targetName}" 的 releaseUrl 为: ${newHost}`);
+        if (icon !== undefined) data[index].icon = icon;
+        if (color !== undefined) data[index].color = color;
+        if (miniAppType !== undefined) data[index].miniAppType = miniAppType;
+        if (category !== undefined) data[index].category = category;
+        if (image !== undefined) data[index].image = image;
+        console.log(`已更新 "${targetName}" 的配置`);
     } else {
         console.log("未找到匹配项，添加新项");
         // 未找到匹配项，添加新项
@@ -89,13 +115,13 @@ function updateJsonData(data, targetName, targetModuleName, newHost) {
         const newItem = {
             id: (maxId + 1).toString(),
             name: targetName,
-            icon: "📌", // 默认图标
-            color: "#000000", // 默认颜色
-            miniAppType: "RN", // 默认类型
+            icon: icon || "📌", // 使用配置中的图标，或默认图标
+            color: color || "#000000", // 使用配置中的颜色，或默认颜色
+            miniAppType: miniAppType || "RN", // 使用配置中的类型，或默认类型
             host: newHost,
             module_name: targetModuleName.replace(/\s+/g, ''), // 简单处理为去掉空格的name
-            category: "gaming", // 默认分类
-            image: "", // 空图片
+            category: category || "gaming", // 使用配置中的分类，或默认分类
+            image: image || "", // 使用配置中的图片，或空图片
             releaseUrl: newHost // 发布地址
         };
         
@@ -126,14 +152,19 @@ async function saveToS3(data) {
 // 主函数
 async function main() {
     try {
-        console.log(`接收参数 - name: ${name}, moduleName: ${moduleName}, host: ${host}`);
+        console.log(`接收参数 - name: ${name}, moduleName: ${moduleName}, releaseUrl: ${releaseUrl}, environment: ${environment}`);
+        if (config.icon) console.log(`  icon: ${config.icon}`);
+        if (config.color) console.log(`  color: ${config.color}`);
+        if (config.miniAppType) console.log(`  miniAppType: ${config.miniAppType}`);
+        if (config.category) console.log(`  category: ${config.category}`);
+        if (config.image) console.log(`  image: ${config.image}`);
         
         // 获取现有数据
         const jsonData = await fetchJsonData(jsonUrl);
         console.log('成功获取现有JSON数据');
         
-        // 更新数据
-        const updatedData = updateJsonData(jsonData, name, moduleName, host);
+        // 更新数据（传递完整的 config 对象）
+        const updatedData = updateJsonData(jsonData, config);
         
         // 保存到S3
         await saveToS3(updatedData);
