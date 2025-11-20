@@ -1,0 +1,4 @@
+# 忽略根目录下所有以 github_mini 开头的文件和目录
+github_mini*/
+
+node_modules/
