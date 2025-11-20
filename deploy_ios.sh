@@ -78,7 +78,7 @@ ZIP_FILE="${VERSION}.zip"
 
 # 压缩ios目录下的所有文件
 echo "正在将 ${MINIAPP_PATH}/rnbundle 目录下的文件压缩到 ${ZIP_FILE}..."
-zip -r "$ZIP_FILE" ${MINIAPP_PATH}/rnbundle/*
+zip -r "$ZIP_FILE" rnbundle/*
 
 # 检查压缩是否成功
 if [ $? -ne 0 ]; then
